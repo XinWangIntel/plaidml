@@ -46,6 +46,20 @@ struct ForLoopMapper : public ConvertSimpleSCFToGPUBase<ForLoopMapper> {
                                                     numThreadDims)))
           signalPassFailure();
       } else if (auto forOp = dyn_cast<ForOp>(&op)) {
+        // legalize single forop
+        Operation *nested = &forOp.getBody()->front();
+        if (!dyn_cast<ForOp>(nested)) {
+          OpBuilder builder(forOp.getOperation());
+          Location loc = forOp.getLoc();
+          auto const0 =
+              builder.create<ConstantOp>(loc, builder.getIndexAttr(0));
+          auto const1 =
+              builder.create<ConstantOp>(loc, builder.getIndexAttr(1));
+          auto newForOp = builder.create<ForOp>(loc, const0, const1, const1);
+          auto begin = newForOp.getBody()->begin();
+          forOp.getOperation()->moveBefore(&(*begin));
+          forOp = newForOp;
+        }
         if (failed(
                 convertLoopNestToGPULaunch(forOp, numBlockDims, numThreadDims)))
           signalPassFailure();

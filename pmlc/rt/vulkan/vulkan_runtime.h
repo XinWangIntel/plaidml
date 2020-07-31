@@ -217,7 +217,7 @@ private:
   /// Maps storage class to buffer usage flags.
   mlir::LogicalResult
   mapStorageClassToBufferUsageFlag(mlir::spirv::StorageClass storageClass,
-                                   VkBufferUsageFlagBits &bufferUsage);
+                                   VkBufferUsageFlags &bufferUsage);
 
   mlir::LogicalResult countDeviceMemorySize();
 

@@ -64,13 +64,13 @@ LogicalResult VulkanRuntime::mapStorageClassToDescriptorType(
 }
 
 LogicalResult VulkanRuntime::mapStorageClassToBufferUsageFlag(
-    spirv::StorageClass storageClass, VkBufferUsageFlagBits &bufferUsage) {
+    spirv::StorageClass storageClass, VkBufferUsageFlags &bufferUsage) {
   switch (storageClass) {
   case spirv::StorageClass::StorageBuffer:
-    bufferUsage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    bufferUsage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
     break;
   case spirv::StorageClass::Uniform:
-    bufferUsage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    bufferUsage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
     break;
   default:
     llvm::errs() << "unsupported storage class";
@@ -479,8 +479,8 @@ LogicalResult VulkanRuntime::createMemoryBuffers() {
       VulkanDeviceMemoryBuffer memoryBuffer;
       memoryBuffer.bindingIndex = resourceDataBindingPair.first;
       VkDescriptorType descriptorType = {};
-      VkBufferUsageFlagBits bufferUsageSrc = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-      VkBufferUsageFlagBits bufferUsageDst = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+      VkBufferUsageFlags bufferUsageSrc = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+      VkBufferUsageFlags bufferUsageDst = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
       // Check that descriptor set has storage class map.
       const auto resourceStorageClassMapIt =

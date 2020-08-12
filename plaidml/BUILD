@@ -15,6 +15,7 @@ plaidml_cc_library(
         "//plaidml/edsl",
         "//plaidml/exec",
         "//plaidml/op",
+        "//pmlc/rt/vulkan",
     ],
 )
 

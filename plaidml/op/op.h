@@ -37,9 +37,7 @@ enum class AutoGroupMode {
 };
 
 enum class AutoPadMode {
-  NONE,
-  NOTSET = NONE,
-  EXPLICIT = NONE,
+  EXPLICIT,
   SAME_LOWER,
   SAME_UPPER,
   VALID,
@@ -109,6 +107,19 @@ enum class TensorLayout {
   _LAST,
 };
 
+struct int_list {
+  int_list(const std::vector<int>& elts)  // NOLINT[runtime/explicit]
+      : value(edsl::make_tuple(elts)) {}
+  int_list(const std::vector<size_t>& elts)  // NOLINT[runtime/explicit]
+      : value(edsl::make_tuple(elts)) {}
+  int_list(const std::initializer_list<int>& elts)  // NOLINT[runtime/explicit]
+      : value(edsl::make_tuple(std::vector<int>(elts))) {}
+  int_list(const std::initializer_list<size_t>& elts)  // NOLINT[runtime/explicit]
+      : value(edsl::make_tuple(std::vector<size_t>(elts))) {}
+
+  edsl::Value value;
+};
+
 inline edsl::Tensor abs(const edsl::Tensor& I) {
   auto args = edsl::make_tuple(I);
   return details::op("abs", args).as_tensor();
@@ -165,51 +176,23 @@ class convolution {
         deriv_mode_(ConvDerivMode::NONE),
         infer_result_shape_(false) {}
 
-  template <typename T, typename std::enable_if<std::is_integral<T>::value>::type* = nullptr>
-  convolution& strides(const std::vector<T>& strides) {
-    strides_ = edsl::make_tuple(strides);
+  convolution& strides(int_list elts) {
+    strides_ = elts.value;
     return *this;
   }
 
-  template <typename T, typename std::enable_if<std::is_integral<T>::value>::type* = nullptr>
-  convolution& strides(const std::initializer_list<T>& strides) {
-    strides_ = edsl::make_tuple(std::vector<T>(strides));
+  convolution& dilations(int_list elts) {
+    dilations_ = elts.value;
     return *this;
   }
 
-  template <typename T, typename std::enable_if<std::is_integral<T>::value>::type* = nullptr>
-  convolution& dilations(const std::vector<T>& dilations) {
-    dilations_ = edsl::make_tuple(dilations);
+  convolution& data_dilations(int_list elts) {
+    data_dilations_ = elts.value;
     return *this;
   }
 
-  template <typename T, typename std::enable_if<std::is_integral<T>::value>::type* = nullptr>
-  convolution& dilations(const std::initializer_list<T>& dilations) {
-    dilations_ = edsl::make_tuple(std::vector<T>(dilations));
-    return *this;
-  }
-
-  template <typename T, typename std::enable_if<std::is_integral<T>::value>::type* = nullptr>
-  convolution& data_dilations(const std::vector<T>& data_dilations) {
-    data_dilations_ = edsl::make_tuple(data_dilations);
-    return *this;
-  }
-
-  template <typename T, typename std::enable_if<std::is_integral<T>::value>::type* = nullptr>
-  convolution& data_dilations(const std::initializer_list<T>& data_dilations) {
-    data_dilations_ = edsl::make_tuple(std::vector<T>(data_dilations));
-    return *this;
-  }
-
-  template <typename T, typename std::enable_if<std::is_integral<T>::value>::type* = nullptr>
-  convolution& filter_shape(const std::vector<T>& filter_shape) {
-    filter_shape_ = edsl::make_tuple(filter_shape);
-    return *this;
-  }
-
-  template <typename T, typename std::enable_if<std::is_integral<T>::value>::type* = nullptr>
-  convolution& filter_shape(const std::initializer_list<T>& filter_shape) {
-    filter_shape_ = edsl::make_tuple(std::vector<T>(filter_shape));
+  convolution& filter_shape(int_list elts) {
+    filter_shape_ = elts.value;
     return *this;
   }
 
@@ -218,15 +201,8 @@ class convolution {
     return *this;
   }
 
-  template <typename T, typename std::enable_if<std::is_integral<T>::value>::type* = nullptr>
-  convolution& manual_padding(const std::vector<T>& manual_padding) {
-    manual_padding_ = edsl::make_tuple(manual_padding);
-    return *this;
-  }
-
-  template <typename T, typename std::enable_if<std::is_integral<T>::value>::type* = nullptr>
-  convolution& manual_padding(const std::initializer_list<T>& manual_padding) {
-    manual_padding_ = edsl::make_tuple(std::vector<T>(manual_padding));
+  convolution& manual_padding(int_list elts) {
+    manual_padding_ = elts.value;
     return *this;
   }
 
@@ -270,15 +246,8 @@ class convolution {
     return *this;
   }
 
-  template <typename T, typename std::enable_if<std::is_integral<T>::value>::type* = nullptr>
-  convolution& result_shape(const std::vector<T>& result_shape) {
-    result_shape_ = edsl::make_tuple(result_shape);
-    return *this;
-  }
-
-  template <typename T, typename std::enable_if<std::is_integral<T>::value>::type* = nullptr>
-  convolution& result_shape(const std::initializer_list<T>& result_shape) {
-    result_shape_ = edsl::make_tuple(std::vector<T>(result_shape));
+  convolution& result_shape(int_list elts) {
+    result_shape_ = elts.value;
     return *this;
   }
 
@@ -349,11 +318,6 @@ inline edsl::Tensor dot(const edsl::Tensor& I, const edsl::Tensor& K) {
 inline edsl::Tensor elu(const edsl::Tensor& I, double alpha) {
   auto args = edsl::make_tuple(I, alpha);
   return details::op("elu", args).as_tensor();
-}
-
-inline edsl::Tensor expand_dims(const edsl::Tensor& I, int axis) {
-  auto args = edsl::make_tuple(I, axis);
-  return details::op("expand_dims", args).as_tensor();
 }
 
 inline edsl::Tensor flip(const edsl::Tensor& I, int axis) {
@@ -622,6 +586,11 @@ inline edsl::Tensor tile(const edsl::Tensor& I, const std::vector<int>& tiling_f
 inline edsl::Tensor transpose(const edsl::Tensor& I, const edsl::Value& axes = edsl::None()) {
   auto args = edsl::make_tuple(I, axes);
   return details::op("transpose", args).as_tensor();
+}
+
+inline edsl::Tensor unsqueeze(const edsl::Tensor& I, const std::vector<int64_t>& axes) {
+  auto args = edsl::make_tuple(I, edsl::make_tuple(axes));
+  return details::op("unsqueeze", args).as_tensor();
 }
 
 inline edsl::Tensor variance(const edsl::Tensor& I, const edsl::Value& axes = edsl::None(), bool keepdims = false) {

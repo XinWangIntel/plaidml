@@ -32,6 +32,14 @@ Program makeProgram(const std::string &name,
   return program;
 }
 
+template <typename T>
+Buffer makeBuffer(const TensorShape &shape, const std::vector<T> &data) {
+  const auto &curDevice = plaidml::Settings::get("PLAIDML_DEVICE");
+  Buffer buffer(curDevice, shape);
+  buffer.copy_from(data.data());
+  return buffer;
+}
+
 Tensor Dot(const Tensor &X, const Tensor &Y) {
   TensorDim I, J, K;
   TensorIndex i("i"), j("j"), k("k");
@@ -136,6 +144,23 @@ TEST_F(CppEdsl, DoubleDot) {
   // clang-format on
   runProgram(program);
 }
+
+/*TEST_F(CppEdsl, Max) {
+  auto A = Placeholder(DType::FLOAT32, {3, 3});
+  TensorDim I, J, K;
+  TensorIndex i("i"), j("j");
+  A.bind_dims(I, K);
+  auto R = TensorOutput(I);
+  R(i) >= A(i, j);
+  auto program = makeProgram("max", {R});
+  std::vector<float> input = {
+      -5.0f, -6.0f, -7.0f,  //
+      4.0f,  5.0f,  6.0f,   //
+      7.0f,  8.0f,  9.0f,   //
+  };
+  std::vector<float> expected = {-5.0, 6.0, 9.0};
+  checkProgram(program, {{A, input}}, {{R, expected}});
+}*/
 
 TEST_F(CppEdsl, EltwiseAdd) {
   auto A = Placeholder(DType::FLOAT32, {10, 20});
@@ -442,6 +467,25 @@ TEST_F(CppEdsl, GlobalMin) {
   runProgram(program);
 }
 
+TEST_F(CppEdsl, CumSum) {
+  auto I = Placeholder(DType::FLOAT32, {10}, "I");
+  TensorDim N;
+  TensorIndex i, k;
+  I.bind_dims(N);
+  auto O = TensorOutput(N);
+  O(i) += I(k);
+  O.add_constraint(i - k < N);
+  auto program = makeProgram("cumsum", {O});
+  // clang-format off
+  // CHECK-LABEL: CppEdsl.CumSum
+  // CHECK: func @cumsum
+  // CHECK: %[[cst:.*]] = "eltwise.sconst"() {value = 0.000000e+00 : f64} : () -> tensor<f32>
+  // CHECK: %{{.*}} = tile.contract add, none, %[[cst]], %{{.*}} {cons = #set{{[0-9]+}}, sink = #map{{[0-9]+}}, srcs = [#map{{[0-9]+}}]} : tensor<f32>, tensor<10xf32> -> tensor<10xf32>
+  // CHECK: return %{{.*}} : tensor<10xf32>
+  // clang-format on
+  runProgram(program);
+}
+
 Tensor ComplexConv2d(             //
     const Tensor &I,              //
     const Tensor &K,              //
@@ -494,6 +538,22 @@ TEST_F(CppEdsl, ComplexConv2d) {
   // CHECK: return %{{.*}} : tensor<1x112x112x3x32xf32>
   // clang-format on
   runProgram(program);
+}
+
+TEST_F(CppEdsl, Reciprocal) {
+  auto A = Placeholder(DType::FLOAT32, {6}, "A");
+  auto R = 1.0 / A;
+  auto program = makeProgram("reciprocal", {R});
+  // clang-format off
+  // CHECK-LABEL: CppEdsl.Reciprocal
+  // CHECK: func @reciprocal
+  // CHECK: %[[cst:.*]] = "eltwise.sconst"() {value = 1.000000e+00 : f64} : () -> tensor<f32>
+  // CHECK: %{{.*}} = "eltwise.div"(%[[cst]], %{{.*}}) : (tensor<f32>, tensor<6xf32>) -> tensor<6xf32>
+  // CHECK: return %{{.*}} : tensor<6xf32>
+  // clang-format on
+  std::vector<float> input = {1, 2, 4, 5, 8, 10};
+  std::vector<float> expected = {1.0, 0.5, 0.25, 0.2, 0.125, 0.1};
+  checkProgram(program, {{A, input}}, {{R, expected}});
 }
 
 TEST_F(CppEdsl, GradientDot) {

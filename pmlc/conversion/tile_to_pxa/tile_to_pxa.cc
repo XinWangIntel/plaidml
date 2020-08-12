@@ -546,9 +546,10 @@ static void updateAffineMap(Operation *in, const PaddingInfo &padding) {
   in->setAttr("map", AffineMapAttr::get(accMap));
 }
 
-static Value buildBroadcastLoad(OpBuilder &builder, Location loc, Value operand,
-                                unsigned outRank,
-                                Optional<PaddingInfo> maybePadding) {
+static Value
+buildBroadcastLoad(OpBuilder &builder, Location loc, Value operand,
+                   unsigned outRank,
+                   Optional<PaddingInfo> maybePadding = llvm::None) {
   auto body = builder.getBlock();
   auto defOp = operand.getDefiningOp();
   Attribute attr;
@@ -559,12 +560,12 @@ static Value buildBroadcastLoad(OpBuilder &builder, Location loc, Value operand,
   // handle broadcasts
   auto operandType = operand.getType().cast<MemRefType>();
   assert(operandType.getRank() <= outRank && "result rank < operand rank");
-  auto op_shape = operandType.getShape();
+  auto shape = operandType.getShape();
   SmallVector<Value, 8> operandIdxs(operandType.getRank());
   for (unsigned i = 0; i < operandType.getRank(); i++) {
     unsigned j = outRank - i - 1;
     unsigned k = operandType.getRank() - i - 1;
-    if (op_shape[k] == 1) {
+    if (shape[k] == 1) {
       operandIdxs[k] = builder.create<mlir::ConstantIndexOp>(loc, 0);
     } else {
       operandIdxs[k] = body->getArgument(j);
@@ -623,10 +624,13 @@ struct BufferAllocator {
     if (maybePadding) {
       auto initValue = createInit(builder, loc, elementType, maybePadding->agg);
       auto parallel = builder.create<AffineParallelOp>(
-          loc, ArrayRef<Type>({memRefType}), shape);
+          loc,
+          /*resultTypes=*/ArrayRef<Type>{memRefType},
+          /*reductions=*/ArrayRef<AtomicRMWKind>{AtomicRMWKind::assign},
+          /*ranges=*/shape);
       auto parallelBuilder = parallel.getBodyBuilder();
-      auto load = buildBroadcastLoad(parallelBuilder, loc, initValue,
-                                     shape.size(), llvm::None);
+      auto load =
+          buildBroadcastLoad(parallelBuilder, loc, initValue, shape.size());
       auto stored = buildSimpleStore(parallelBuilder, loc, load, resultMemRef,
                                      llvm::None);
       parallelBuilder.create<AffineYieldOp>(loc, ValueRange{stored});
@@ -711,8 +715,10 @@ struct EltwiseOpConversion : public OpConversionPattern<FromOpType> {
 
     // Make a parallel for loop to fill the result
     auto forOp = rewriter.create<AffineParallelOp>(
-        loc, ArrayRef<Type>({alloc.memRefType}),
-        alloc.rankedTensorType.getShape());
+        loc,
+        /*resultTypes=*/ArrayRef<Type>{alloc.memRefType},
+        /*reductions=*/ArrayRef<AtomicRMWKind>{AtomicRMWKind::assign},
+        /*ranges=*/alloc.rankedTensorType.getShape());
     auto body = forOp.getBody();
     rewriter.setInsertionPointToStart(body);
 
@@ -788,7 +794,10 @@ struct ContractionOpConversion : public OpConversionPattern<ContractionOp> {
     // Do initialization
     auto shape = alloc.rankedTensorType.getShape();
     auto parallel = rewriter.create<AffineParallelOp>(
-        loc, ArrayRef<Type>({alloc.memRefType}), shape);
+        loc,
+        /*resultTypes=*/ArrayRef<Type>{alloc.memRefType},
+        /*reductions=*/ArrayRef<AtomicRMWKind>{AtomicRMWKind::assign},
+        /*ranges=*/shape);
     auto parallelBuilder = parallel.getBodyBuilder();
     auto maybePadding = getPaddingInfo(op.init().getDefiningOp());
     auto load = buildBroadcastLoad(parallelBuilder, loc, cionAdaptor.init(),
@@ -817,6 +826,7 @@ struct ContractionOpConversion : public OpConversionPattern<ContractionOp> {
     auto forOp = rewriter.create<AffineParallelOp>(
         loc,
         /*resultTypes=*/ArrayRef<Type>{alloc.memRefType},
+        /*reductions=*/ArrayRef<AtomicRMWKind>{AtomicRMWKind::assign},
         /*lbMap=*/op.lowerBounds().getValue(),
         /*lbArgs=*/ArrayRef<Value>{},
         /*ubMap=*/ubMap,
@@ -905,7 +915,10 @@ struct IndexOpConversion : public OpConversionPattern<IndexOp> {
 
     // Make a parallel for loop to fill the result
     auto forOp = rewriter.create<AffineParallelOp>(
-        loc, ArrayRef<Type>{resultType}, resultType.getShape());
+        loc,
+        /*resultTypes=*/ArrayRef<Type>{resultType},
+        /*reductions=*/ArrayRef<AtomicRMWKind>{AtomicRMWKind::assign},
+        /*ranges=*/resultType.getShape());
     auto body = forOp.getBody();
     rewriter.setInsertionPointToStart(body);
     auto idxs = body->getArguments();
@@ -997,36 +1010,36 @@ struct CastOpConversion : public OpConversionPattern<ew::CastOp> {
                   ConversionPatternRewriter &rewriter) const override {
     IVLOG(2, "CastOpConversion::matchAndRewrite>");
 
-    // Gather some basic info
     auto loc = op.getLoc();
     TypeConverter typeConverter;
-
     auto oldResultType = op.result().getType();
     auto resultType =
         typeConverter.convertType(oldResultType).cast<MemRefType>();
     auto operand = operands[0];
-    auto operandType = operand.getType().cast<MemRefType>();
-    if (resultType == operandType) {
+    if (resultType == operand.getType()) {
       rewriter.replaceOp(op, operand);
       return success();
     }
-    bool resultIsSigned = getElementType(oldResultType).isSignedInteger();
 
     // Make an allocation for the output
     auto resultMemRef = rewriter.create<AllocOp>(loc, resultType).getResult();
 
     // Make a parallel for loop to fill the result
     auto forOp = rewriter.create<AffineParallelOp>(
-        loc, ArrayRef<Type>{resultType}, resultType.getShape());
+        loc,
+        /*resultTypes=*/ArrayRef<Type>{resultType},
+        /*reductions=*/ArrayRef<AtomicRMWKind>{AtomicRMWKind::assign},
+        /*ranges=*/resultType.getShape());
     auto body = forOp.getBody();
     rewriter.setInsertionPointToStart(body);
-    auto idxs = body->getArguments();
 
     // Create the load
-    auto scalar = rewriter.create<AffineLoadOp>(loc, operand, idxs);
+    auto scalar =
+        buildBroadcastLoad(rewriter, loc, operand, resultType.getRank());
 
     // Create the standard cast op
     auto dtype = getElementType(op.tensor());
+    bool resultIsSigned = getElementType(oldResultType).isSignedInteger();
     auto result = createCastOp(rewriter, loc, scalar, dtype.isSignedInteger(),
                                resultType.getElementType(), resultIsSigned);
 
@@ -1038,7 +1051,6 @@ struct CastOpConversion : public OpConversionPattern<ew::CastOp> {
     // Replace the op
     rewriter.replaceOp(op, forOp.getResult(0));
 
-    IVLOG(2, "CastOpConversion::matchAndRewrite returns success");
     return success();
   }
 };

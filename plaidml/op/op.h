@@ -107,6 +107,14 @@ enum class TensorLayout {
   _LAST,
 };
 
+enum class PadMode {
+  CONSTANT,
+  EDGE,
+  REFLECT,
+  SYMMETRIC,
+  _LAST,
+};
+
 struct int_list {
   int_list(const std::vector<int>& elts)  // NOLINT[runtime/explicit]
       : value(edsl::make_tuple(elts)) {}
@@ -320,6 +328,46 @@ inline edsl::Tensor elu(const edsl::Tensor& I, double alpha) {
   return details::op("elu", args).as_tensor();
 }
 
+class explicit_padding {
+ public:
+  explicit explicit_padding(const edsl::Tensor& I, const std::vector<int>& lo_pads, const std::vector<int>& hi_pads)
+      : I_(I), lo_pads_(lo_pads), hi_pads_(hi_pads), mode_(PadMode::CONSTANT), padval_(0) {}
+
+  explicit_padding& lo_pads(const std::vector<int>& lo_pads) {
+    lo_pads_ = lo_pads;
+    return *this;
+  }
+
+  explicit_padding& hi_pads(const std::vector<int>& hi_pads) {
+    hi_pads_ = hi_pads;
+    return *this;
+  }
+
+  explicit_padding& mode(PadMode mode) {
+    mode_ = mode;
+    return *this;
+  }
+
+  template <typename T>
+  explicit_padding& padval(const T& padval) {
+    padval_ = edsl::Value(padval);
+    return *this;
+  }
+
+  operator edsl::Tensor() const {
+    auto args =
+        edsl::make_tuple(I_, edsl::make_tuple(lo_pads_), edsl::make_tuple(hi_pads_), static_cast<int>(mode_), padval_);
+    return details::op("explicit_padding", args).as_tensor();
+  }
+
+ private:
+  edsl::Tensor I_;
+  std::vector<int> lo_pads_;
+  std::vector<int> hi_pads_;
+  PadMode mode_;
+  edsl::Value padval_;
+};
+
 inline edsl::Tensor flip(const edsl::Tensor& I, int axis) {
   auto args = edsl::make_tuple(I, axis);
   return details::op("flip", args).as_tensor();
@@ -406,6 +454,60 @@ inline edsl::Tensor minimum(const edsl::Tensor& X, const edsl::Tensor& Y) {
   auto args = edsl::make_tuple(X, Y);
   return details::op("minimum", args).as_tensor();
 }
+
+class mvn {
+ public:
+  explicit mvn(const plaidml::edsl::Tensor& I)
+      : I_(I), axes_(edsl::None()), normalize_variance_(true), epsilon_(1e-9), across_channels_(true) {}
+
+  mvn& axes(const std::vector<int64_t>& axes) {
+    // negative axes interpreted as in numpy
+    if (!across_channels_ || !layout_.empty()) {
+      throw std::runtime_error("When using layout and across_channels, axes may not be specified");
+    }
+    axes_ = edsl::make_tuple(axes);
+    return *this;
+  }
+
+  mvn& across_channels(bool flag) {
+    if (!axes_.is_none()) {
+      throw std::runtime_error("May not specify both axes and across_channels for MVN");
+    }
+    across_channels_ = flag;
+    return *this;
+  }
+
+  mvn& normalize_variance(bool flag) {
+    normalize_variance_ = flag;
+    return *this;
+  }
+
+  mvn& epsilon(double value) {
+    epsilon_ = value;
+    return *this;
+  }
+
+  mvn& layout(const std::string& value) {
+    if (!axes_.is_none()) {
+      throw std::runtime_error("May not specify both axes and layout for MVN");
+    }
+    layout_ = value;
+    return *this;
+  }
+
+  operator plaidml::edsl::Tensor() const {
+    auto args = edsl::make_tuple(I_, axes_, normalize_variance_, epsilon_, across_channels_, layout_);
+    return details::op("mvn", args).as_tensor();
+  }
+
+ private:
+  plaidml::edsl::Tensor I_;
+  edsl::Value axes_;
+  bool normalize_variance_;
+  double epsilon_;
+  bool across_channels_;
+  std::string layout_;
+};
 
 class l2norm {
  public:

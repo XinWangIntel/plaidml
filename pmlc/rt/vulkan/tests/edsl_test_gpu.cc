@@ -90,6 +90,32 @@ TEST_F(CppEdsl, Cast) {
   checkProgram(program, {{A, A_input}}, {{B, B_output}});
 }
 
+Tensor ConstAdd(const std::vector<int32_t> &a, const std::vector<int32_t> &b) {
+  std::vector<int64_t> shape = {4};
+  auto bufferA = makeBuffer(TensorShape(DType::INT32, shape), a);
+  auto bufferB = makeBuffer(TensorShape(DType::INT32, shape), b);
+  auto A = Constant(LogicalShape(DType::INT32, shape), bufferA, "A");
+  auto B = Constant(LogicalShape(DType::INT32, shape), bufferB, "B");
+  return A + B;
+}
+
+TEST_F(CppEdsl, ConstAdd) {
+  std::vector<int> a = {4, 3, 2, 1};
+  std::vector<int> b = {1, 2, 3, 4};
+  auto O = ConstAdd(a, b);
+  auto program = makeProgram("const_add", {O});
+
+  // clang-format off
+  // CHECK-LABEL: CppEdsl.ConstAdd
+  // CHECK: func @const_add
+  // CHECK: %{{.*}} = "eltwise.add"(%{{.*}}, %{{.*}}) : (tensor<4xsi32>, tensor<4xsi32>) -> tensor<4xsi32>
+  // CHECK: return %{{.*}} : tensor<4xsi32>
+  // clang-format on
+
+  std::vector<int32_t> expected = {5, 5, 5, 5};
+  checkProgram(program, {}, {{O, expected}});
+}
+
 TEST_F(CppEdsl, Dot) {
   int64_t M = 8;
   int64_t N = 32;
@@ -145,7 +171,7 @@ TEST_F(CppEdsl, DoubleDot) {
   runProgram(program);
 }
 
-/*TEST_F(CppEdsl, Max) {
+TEST_F(CppEdsl, Max) {
   auto A = Placeholder(DType::FLOAT32, {3, 3});
   TensorDim I, J, K;
   TensorIndex i("i"), j("j");
@@ -154,13 +180,13 @@ TEST_F(CppEdsl, DoubleDot) {
   R(i) >= A(i, j);
   auto program = makeProgram("max", {R});
   std::vector<float> input = {
-      -5.0f, -6.0f, -7.0f,  //
-      4.0f,  5.0f,  6.0f,   //
-      7.0f,  8.0f,  9.0f,   //
+      5.0f, -7.0f, 6.0f, //
+      6.0f, 5.0f,  4.0f, //
+      7.0f, 8.0f,  9.0f, //
   };
-  std::vector<float> expected = {-5.0, 6.0, 9.0};
+  std::vector<float> expected = {6.0, 6.0, 9.0};
   checkProgram(program, {{A, input}}, {{R, expected}});
-}*/
+}
 
 TEST_F(CppEdsl, EltwiseAdd) {
   auto A = Placeholder(DType::FLOAT32, {10, 20});

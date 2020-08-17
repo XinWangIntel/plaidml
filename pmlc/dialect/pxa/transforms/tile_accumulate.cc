@@ -40,10 +40,10 @@ Operation *GetOriginalDef(Value val) {
     auto ret = mlir::cast<AffineYieldOp>(ap.getBody()->getTerminator());
     auto src = ret.getOperand(opRes.getResultNumber());
     auto defop = src.getDefiningOp();
-    if (dyn_cast<AffineReduceOp>(defop)) {
+    if (dyn_cast<PxaReduceOp>(defop)) {
       opRes = src.cast<mlir::OpResult>();
     } else if (dyn_cast<AffineIfOp>(defop)) {
-      defop->walk([&](AffineReduceOp op) {
+      defop->walk([&](PxaReduceOp op) {
         opRes = op.getResult().cast<mlir::OpResult>();
       });
     }
@@ -55,7 +55,7 @@ bool isAccumulation(AffineParallelOp op) {
   bool AggTag = false;
   auto argRange = op.getIVs();
   auto parallelLoopNum = argRange.size() < 2 ? argRange.size() : 2;
-  op.walk([&](AffineReduceOp reduce) {
+  op.walk([&](PxaReduceOp reduce) {
     auto range = reduce.idxs();
     for (size_t i = 0; i < parallelLoopNum; i++) {
       auto firstArg = std::find(range.begin(), range.end(), argRange[i]);
@@ -100,7 +100,7 @@ void TileAccumulations(AffineParallelOp op) {
   assert(op.getNumResults() == 1);
   if (isAccumulation(op)) {
     auto srcDef = GetOriginalDef(op.getResult(0));
-    auto red = dyn_cast<AffineReduceOp>(srcDef);
+    auto red = dyn_cast<PxaReduceOp>(srcDef);
     // Get strides for output
     auto si = *computeStrideInfo(red);
     // Find all the accumulation indexes (stride 0 with respect to output) and

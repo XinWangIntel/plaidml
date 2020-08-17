@@ -29,6 +29,7 @@ using namespace mlir::scf; // NOLINT
 namespace pmlc::conversion::scf_to_gpu {
 
 namespace {
+/*
 // Change new added SCF to standards and avoid influence on gpu::LaunchOp
 // content
 struct ForLowering : public OpRewritePattern<mlir::scf::ForOp> {
@@ -111,6 +112,7 @@ LogicalResult ForLowering::matchAndRewrite(scf::ForOp forOp,
   rewriter.replaceOp(forOp, conditionBlock->getArguments().drop_front());
   return success();
 }
+*/
 // A pass that traverses top-level loops in the function and converts them to
 // GPU launch operations.  Nested launches are not allowed, so this does not
 // walk the function recursively to avoid considering nested loops.
@@ -122,10 +124,10 @@ struct ForLoopMapper : public ConvertSimpleSCFToGPUBase<ForLoopMapper> {
   }
 
   void runOnFunction() override {
-    OwningRewritePatternList patterns;
-    auto *context = &getContext();
-    patterns.insert<ForLowering>(context);
-    applyPatternsAndFoldGreedily(getOperation(), patterns);
+    // OwningRewritePatternList patterns;
+    // auto *context = &getContext();
+    // patterns.insert<ForLowering>(context);
+    // applyPatternsAndFoldGreedily(getOperation(), patterns);
 
     for (Operation &op : llvm::make_early_inc_range(getFunction().getOps())) {
       if (auto forOp = dyn_cast<AffineForOp>(&op)) {

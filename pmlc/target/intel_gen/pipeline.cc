@@ -108,6 +108,7 @@ void pipelineBuilder(OpPassManager &pm) {
 
   // Move accumulation indexes into an inner loop
   pm.addPass(pmlc::dialect::pxa::createTileAccumulatePass());
+  pm.addPass(pmlc::dialect::pxa::createNestLoopsPass());
   pm.addPass(pmlc::dialect::pxa::createAffineNormalizePass(/*promote=*/false));
   pm.addPass(createCanonicalizerPass());
   pm.addPass(createCSEPass());

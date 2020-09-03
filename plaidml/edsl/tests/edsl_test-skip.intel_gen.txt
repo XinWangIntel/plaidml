@@ -12,4 +12,3 @@ CppEdsl.HigherPrecisionConstants
 CppEdsl.Pow
 CppEdsl.Round
 CppEdsl.SinH
-

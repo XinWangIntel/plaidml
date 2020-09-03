@@ -66,7 +66,5 @@ plaidml_cc_test(
     deps = [
         ":op",
         "//plaidml:testenv",
-        "@volk",
     ],
-    linkstatic=True,
 )

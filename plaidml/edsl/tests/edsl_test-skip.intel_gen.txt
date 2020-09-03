@@ -10,7 +10,6 @@ CppEdsl.CosH
 CppEdsl.Erf
 CppEdsl.HigherPrecisionConstants
 CppEdsl.Pow
-CppEdsl.Prng
 CppEdsl.Round
 CppEdsl.SinH
 

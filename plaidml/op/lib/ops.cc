@@ -464,7 +464,7 @@ Value all(const Value& value) {
   I.bind_dims(agg.src_dims);
   auto O = TensorOutput(agg.dst_dims);
   O(agg.dst_idxs) *= I_as_bool(agg.src_idxs);
-  return Value{cast(O, DType::UINT8)};
+  return Value{O};
 }
 
 Value any(const Value& value) {
@@ -491,7 +491,8 @@ Value any(const Value& value) {
   auto S = TensorOutput(agg.dst_dims);
   S(agg.dst_idxs) += I_as_bool(agg.src_idxs);
   auto O = select(S == 0, Tensor{0}, Tensor{1});
-  return Value{cast(O, DType::UINT8)};
+  // return Value{cast(O, DType::UINT8)};
+  return Value{O};
 }
 
 Value argmax(const Value& value) {

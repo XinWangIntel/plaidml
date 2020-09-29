@@ -17,10 +17,12 @@ plaidml_cc_test(
         "--plaidml_target=$(plaidml_target)",
     ] + select({
         "//plaidml:intel_gen": ["--skip_test_file=$(location edsl_test-skip.intel_gen.txt)"],
+        "//plaidml:nvidia_gpu": ["--skip_test_file=$(location edsl_test-skip.nvidia_gpu.txt)"],
         "//conditions:default": [],
     }),
     data = select({
         "//plaidml:intel_gen": [":edsl_test-skip.intel_gen.txt"],
+        "//plaidml:nvidia_gpu": [":edsl_test-skip.nvidia_gpu.txt"],
         "//conditions:default": [],
     }),
     linkstatic = True,

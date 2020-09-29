@@ -1,0 +1,9 @@
+CppEdsl.Asin
+CppEdsl.BitLeft
+CppEdsl.BitNot
+CppEdsl.BitRightScalar
+CppEdsl.BitRightTensor
+CppEdsl.ConvI8
+CppEdsl.Erf
+CppEdsl.HigherPrecisionConstants
+CppEdsl.Winograd

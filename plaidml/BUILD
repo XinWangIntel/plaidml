@@ -36,6 +36,7 @@ plaidml_cc_library(
         "//pmlc:all_passes_and_dialects",
         "//pmlc/target/demo",
         "//pmlc/target/intel_gen",
+        "//pmlc/target/nvidia_gpu",
         "//pmlc/target/x86",
     ],
 )
@@ -221,9 +222,19 @@ config_setting(
     },
 )
 
+config_setting(
+    name = "nvidia_gpu",
+    flag_values = {
+        ":target": "nvidia_gpu",
+    },
+)
+
 selects.config_setting_group(
     name = "gpu_target",
-    match_any = [":intel_gen"],
+    match_any = [
+        ":intel_gen",
+        ":nvidia_gpu",
+    ],
 )
 
 plaidml_settings(

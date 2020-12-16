@@ -65,6 +65,7 @@ pml_cc_library(
   DEPS
     IE::inference_engine
     IE::ngraph
+    IE::inference_engine_transformations
 )
 
 if(NOT InferenceEngineDeveloperPackage_FOUND)

@@ -35,8 +35,86 @@ struct LibMCallLowering : public ConvertOpToLLVMPattern<T> {
     SmallVector<LLVM::LLVMType, 2> argTypes(getArity(), f32Type);
     auto funcType = LLVM::LLVMType::getFunctionTy(f32Type, argTypes, false);
     auto sym = getOrInsertFuncOp(getFuncName(), funcType, op);
-    rewriter.replaceOpWithNewOp<LLVM::CallOp>(
-        op, ArrayRef<Type>{f32Type}, rewriter.getSymbolRefAttr(sym), operands);
+
+    auto originalResultType = op->getResult(0).getType();
+    if (originalResultType.isa<FloatType>()) {
+      int bitWidth = originalResultType.cast<FloatType>().getWidth();
+      if (bitWidth == 32) {
+        rewriter.replaceOpWithNewOp<LLVM::CallOp>(
+            op, ArrayRef<Type>{f32Type}, rewriter.getSymbolRefAttr(sym),
+            operands);
+      } else {
+        SmallVector<Value, 12> newOperands;
+        for (auto &operand : operands) {
+          if (bitWidth < 32) {
+            auto fpExtOp =
+                rewriter.create<LLVM::FPExtOp>(op->getLoc(), f32Type, operand);
+            newOperands.push_back(fpExtOp.getResult());
+          } else {
+            auto fpTruncOp = rewriter.create<LLVM::FPTruncOp>(op->getLoc(),
+                                                              f32Type, operand);
+            newOperands.push_back(fpTruncOp.getResult());
+          }
+        }
+        auto newOp = rewriter.create<LLVM::CallOp>(
+            op->getLoc(), ArrayRef<Type>{f32Type},
+            rewriter.getSymbolRefAttr(sym), newOperands);
+        auto newResultType =
+            this->typeConverter.convertType(originalResultType);
+        if (bitWidth < 32) {
+          auto fpTruncOp = rewriter.create<LLVM::FPTruncOp>(
+              newOp.getLoc(), cast<LLVMType>(newResultType),
+              newOp.getResult(0));
+          rewriter.replaceOp(op, fpTruncOp.getResult());
+        } else {
+          auto fpExtOp = rewriter.create<LLVM::FPExtOp>(
+              newOp.getLoc(), cast<LLVMType>(newResultType),
+              newOp.getResult(0));
+          rewriter.replaceOp(op, fpExtOp.getResult());
+        }
+      }
+    } else if (originalResultType.isa<IntegerType>()) {
+      bool isSigned = originalResultType.isSignedInteger();
+      SmallVector<Value, 12> newOperands;
+      for (auto &operand : operands) {
+        if (isSigned) {
+          auto siToFPOp =
+              rewriter.create<LLVM::SIToFPOp>(op->getLoc(), f32Type, operand);
+          newOperands.push_back(siToFPOp.getResult());
+        } else {
+          auto uiToFPOp =
+              rewriter.create<LLVM::UIToFPOp>(op->getLoc(), f32Type, operand);
+          newOperands.push_back(uiToFPOp.getResult());
+        }
+      }
+      auto newOp = rewriter.create<LLVM::CallOp>(
+          op->getLoc(), ArrayRef<Type>{f32Type}, rewriter.getSymbolRefAttr(sym),
+          newOperands);
+      auto newResultType = this->typeConverter.convertType(originalResultType);
+      if (isSigned) {
+        auto fpToSIOp = rewriter.create<LLVM::FPToSIOp>(
+            newOp.getLoc(), cast<LLVMType>(newResultType), newOp.getResult(0));
+        rewriter.replaceOp(op, fpToSIOp.getResult());
+      } else {
+        auto fpToUIOp = rewriter.create<LLVM::FPToUIOp>(
+            newOp.getLoc(), cast<LLVMType>(newResultType), newOp.getResult(0));
+        rewriter.replaceOp(op, fpToUIOp.getResult());
+      }
+    } else {
+      SmallVector<Value, 12> newOperands;
+      for (auto &operand : operands) {
+        auto castOp =
+            rewriter.create<LLVM::BitcastOp>(op->getLoc(), f32Type, operand);
+        newOperands.push_back(castOp.getResult());
+      }
+      auto newOp = rewriter.create<LLVM::CallOp>(
+          op->getLoc(), ArrayRef<Type>{f32Type}, rewriter.getSymbolRefAttr(sym),
+          newOperands);
+      auto newResultType = this->typeConverter.convertType(originalResultType);
+      auto castOp = rewriter.create<LLVM::BitcastOp>(
+          newOp.getLoc(), cast<LLVMType>(newResultType), newOp.getResult(0));
+      rewriter.replaceOp(op, castOp.getResult());
+    }
     return success();
   }
 
